@@ -1,0 +1,38 @@
+{
+  "name": "konami-wallet",
+  "version": "1.0.0",
+  "description": "Telegram bot for managing Gnosis Safe multisig wallet",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "gnosis-safe",
+    "multisig",
+    "ethereum"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@safe-global/api-kit": "^4.0.1",
+    "@safe-global/protocol-kit": "^6.1.2",
+    "@safe-global/safe-core-sdk-types": "^5.1.0",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "telegraf": "^4.16.3",
+    "viem": "^2.41.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.10.1",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

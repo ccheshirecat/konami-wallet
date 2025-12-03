@@ -1,8 +1,8 @@
 import express, { Request, Response } from "express";
 import crypto from "crypto";
-import { config } from "../config.js";
+import { config, getExplorerUrl } from "../config.js";
 import { bot } from "../bot/index.js";
-import { formatAddress } from "../safe/index.js";
+import { formatAddress } from "../wallet/index.js";
 import { formatEther } from "viem";
 
 const app = express();
@@ -33,8 +33,16 @@ app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// Alchemy Address Activity Webhook
-// Docs: https://docs.alchemy.com/reference/address-activity-webhook
+// Telegram webhook endpoint
+app.post(`/webhook/telegram/:token`, (req, res) => {
+  if (req.params.token !== config.telegram.botToken) {
+    res.status(401).json({ error: "Invalid token" });
+    return;
+  }
+  bot.handleUpdate(req.body, res);
+});
+
+// Alchemy Address Activity Webhook for incoming TX notifications
 app.post("/webhook/alchemy", async (req: Request, res: Response) => {
   try {
     const signature = req.headers["x-alchemy-signature"] as string;
@@ -51,77 +59,39 @@ app.post("/webhook/alchemy", async (req: Request, res: Response) => {
 
     const payload = req.body;
 
-    // Alchemy Address Activity webhook payload structure
-    // https://docs.alchemy.com/reference/address-activity-webhook
     if (payload.type !== "ADDRESS_ACTIVITY") {
       res.json({ received: true, processed: false, reason: "Not address activity" });
       return;
     }
 
-    const safeAddress = config.safe.address.toLowerCase();
     const groupId = config.telegram.groupId;
-
     if (!groupId) {
       console.log("No group ID configured, skipping notification");
       res.json({ received: true, processed: false, reason: "No group ID" });
       return;
     }
 
-    // Process each activity in the webhook
+    // Process each activity
     for (const activity of payload.event?.activity || []) {
-      // Only process incoming ETH transfers to our Safe
-      if (
-        activity.toAddress?.toLowerCase() === safeAddress &&
-        activity.category === "external" &&
-        activity.asset === "ETH"
-      ) {
+      // Incoming ETH transfer
+      if (activity.category === "external" && activity.asset === "ETH" && activity.value > 0) {
         const valueWei = BigInt(Math.floor(activity.value * 1e18));
         const valueEth = formatEther(valueWei);
 
-        const explorerUrl = getExplorerUrl(activity.hash);
-
         const message =
-          `**Incoming Transaction**\n\n` +
-          `**Amount:** ${valueEth} ETH\n` +
-          `**From:** \`${formatAddress(activity.fromAddress)}\`\n` +
-          `**Tx:** \`${formatAddress(activity.hash)}\`\n\n` +
-          `[View on Explorer](${explorerUrl})`;
+          `💰 *Incoming Transaction*\n\n` +
+          `*Amount:* ${valueEth} ETH\n` +
+          `*From:* \`${formatAddress(activity.fromAddress)}\`\n` +
+          `*TX:* \`${formatAddress(activity.hash)}\`\n\n` +
+          `[View on Explorer](${getExplorerUrl(activity.hash)})`;
 
         try {
           await bot.telegram.sendMessage(groupId, message, {
             parse_mode: "Markdown",
           });
-          console.log(`Notified incoming transfer: ${activity.hash}`);
+          console.log(`Notified incoming: ${activity.hash}`);
         } catch (err) {
-          console.error("Failed to send Telegram notification:", err);
-        }
-      }
-
-      // Also notify on outgoing transactions (executed Safe transactions)
-      if (
-        activity.fromAddress?.toLowerCase() === safeAddress &&
-        activity.category === "external" &&
-        activity.asset === "ETH"
-      ) {
-        const valueWei = BigInt(Math.floor(activity.value * 1e18));
-        const valueEth = formatEther(valueWei);
-
-        const explorerUrl = getExplorerUrl(activity.hash);
-
-        const message =
-          `**Outgoing Transaction Executed**\n\n` +
-          `**Amount:** ${valueEth} ETH\n` +
-          `**To:** \`${formatAddress(activity.toAddress)}\`\n` +
-          `**Tx:** \`${formatAddress(activity.hash)}\`\n\n` +
-          `[View on Explorer](${explorerUrl})`;
-
-        try {
-          await bot.telegram.sendMessage(groupId, message, {
-            parse_mode: "Markdown",
-          });
-          console.log(`Notified outgoing transfer: ${activity.hash}`);
-        } catch (err) {
-          console.error("Failed to send Telegram notification:", err);
+          console.error("Failed to send notification:", err);
         }
       }
     }
@@ -133,31 +103,10 @@ app.post("/webhook/alchemy", async (req: Request, res: Response) => {
   }
 });
 
-function getExplorerUrl(txHash: string): string {
-  const chainId = config.ethereum.chainId;
-  switch (chainId) {
-    case 1:
-      return `https://etherscan.io/tx/${txHash}`;
-    case 137:
-      return `https://polygonscan.com/tx/${txHash}`;
-    case 42161:
-      return `https://arbiscan.io/tx/${txHash}`;
-    case 10:
-      return `https://optimistic.etherscan.io/tx/${txHash}`;
-    case 8453:
-      return `https://basescan.org/tx/${txHash}`;
-    case 11155111:
-      return `https://sepolia.etherscan.io/tx/${txHash}`;
-    default:
-      return `https://etherscan.io/tx/${txHash}`;
-  }
-}
-
 export function startServer(): void {
   const port = config.server.port;
   app.listen(port, () => {
-    console.log(`Webhook server listening on port ${port}`);
-    console.log(`Alchemy webhook URL: http://your-server:${port}/webhook/alchemy`);
+    console.log(`Server listening on port ${port}`);
   });
 }
 

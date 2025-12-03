@@ -1,78 +1,63 @@
 import { startBot } from "./bot/index.js";
 import { startServer } from "./server/index.js";
-import { startPendingTxPolling } from "./listener/index.js";
-import { getSafeInfo } from "./safe/index.js";
-import { config, getSafeAppUrl } from "./config.js";
+import { getBalance, getWalletAddress } from "./wallet/index.js";
+import { config } from "./config.js";
 
 async function main() {
   console.log("=========================================");
   console.log("    Konami Wallet Bot - Starting Up");
   console.log("=========================================\n");
 
-  // Validate Safe connection
+  // Show wallet info
   try {
-    console.log("[1/4] Connecting to Safe...");
-    const safeInfo = await getSafeInfo();
-    console.log(`      Address: ${safeInfo.address}`);
-    console.log(`      Balance: ${parseFloat(safeInfo.balance).toFixed(6)} ETH`);
-    console.log(`      Owners: ${safeInfo.owners.length}`);
-    console.log(`      Threshold: ${safeInfo.threshold} of ${safeInfo.owners.length}`);
-    console.log(`      Safe App: ${getSafeAppUrl(safeInfo.address, config.ethereum.chainId)}`);
-    console.log("      Safe connection successful!\n");
+    console.log("[1/3] Connecting to wallet...");
+    const address = getWalletAddress();
+    const balance = await getBalance();
+    console.log(`      Address: ${address}`);
+    console.log(`      Balance: ${parseFloat(balance.eth).toFixed(6)} ETH`);
+    console.log(`      Chain ID: ${config.ethereum.chainId}`);
+    console.log("      Wallet connected!\n");
   } catch (error) {
-    console.error("Failed to connect to Safe:", error);
-    console.error("\nPlease check your SAFE_ADDRESS and RPC_URL in .env");
+    console.error("Failed to connect to wallet:", error);
     process.exit(1);
   }
 
-  // Start the webhook server
+  // Show authorization config
+  console.log(`      Authorized users: ${config.telegram.authorizedUsers.length}`);
+  console.log(`      Required approvals: ${config.telegram.requiredApprovals}\n`);
+
+  // Start webhook server
   try {
-    console.log("[2/4] Starting webhook server...");
+    console.log("[2/3] Starting webhook server...");
     startServer();
-    console.log("      Webhook server is running!\n");
+    console.log("      Server is running!\n");
   } catch (error) {
-    console.error("Failed to start webhook server:", error);
+    console.error("Failed to start server:", error);
     process.exit(1);
   }
 
-  // Start the Telegram bot
+  // Start Telegram bot
   try {
-    console.log("[3/4] Starting Telegram bot...");
+    console.log("[3/3] Starting Telegram bot...");
     await startBot();
-    console.log("      Telegram bot is running!\n");
+    console.log("      Bot is running!\n");
   } catch (error) {
-    console.error("Failed to start Telegram bot:", error);
-    console.error("\nPlease check your TELEGRAM_BOT_TOKEN in .env");
+    console.error("Failed to start bot:", error);
     process.exit(1);
-  }
-
-  // Start pending transaction polling
-  if (config.telegram.groupId) {
-    console.log("[4/4] Starting pending transaction monitor...");
-    await startPendingTxPolling(30000); // Check every 30 seconds
-    console.log("      Pending transaction monitor is running!\n");
-  } else {
-    console.log(
-      "[4/4] Skipping pending transaction monitor (TELEGRAM_GROUP_ID not set)\n"
-    );
   }
 
   console.log("=========================================");
-  console.log("    Bot is ready! Send /start to begin");
+  console.log("    Bot is ready!");
   console.log("=========================================\n");
 
-  console.log("Available commands:");
+  console.log("Commands:");
+  console.log("  /start    - Show bot info");
+  console.log("  /whoami   - Get your Telegram user ID");
   console.log("  /balance  - Check wallet balance");
-  console.log("  /info     - View Safe details");
-  console.log("  /pending  - List pending transactions");
-  console.log("  /history  - Recent transaction history");
-  console.log("  /withdraw - Get withdrawal instructions\n");
-
-  if (!config.alchemy.webhookSigningKey) {
-    console.log("Note: ALCHEMY_WEBHOOK_SIGNING_KEY not set.");
-    console.log("      Incoming transaction notifications require Alchemy webhook setup.");
-    console.log("      See setup instructions in .env.example\n");
-  }
+  console.log("  /withdraw - Request withdrawal (needs approval)");
+  console.log("  /approve  - Approve pending withdrawal");
+  console.log("  /reject   - Reject pending withdrawal");
+  console.log("  /pending  - Show pending withdrawals\n");
 }
 
 main().catch((error) => {

@@ -1,4 +1,5 @@
 import { Telegraf } from "telegraf";
+import { message } from "telegraf/filters";
 import { config, getExplorerUrl } from "../config.js";
 import {
   getBalance,
@@ -18,8 +19,12 @@ import {
   isUserAuthorized,
   getWithdrawal,
 } from "../store/pending.js";
+import { chat } from "../chat/index.js";
 
 const bot = new Telegraf(config.telegram.botToken);
+
+// Store bot username for mention detection
+let botUsername = "";
 
 // Middleware to check authorization
 function requireAuth(ctx: any, next: () => Promise<void>): Promise<void> | void {
@@ -320,6 +325,54 @@ async function executeWithdrawal(ctx: any, withdrawalId: string): Promise<void> 
   }
 }
 
+// Handle @mentions for chat
+bot.on(message("text"), async (ctx) => {
+  const text = ctx.message.text;
+
+  // Skip if it's a command
+  if (text.startsWith("/")) {
+    return;
+  }
+
+  // Check if bot is mentioned
+  const isMentioned =
+    text.toLowerCase().includes(`@${botUsername.toLowerCase()}`) ||
+    ctx.message.reply_to_message?.from?.id === ctx.botInfo.id;
+
+  if (!isMentioned) {
+    return;
+  }
+
+  // Remove bot mention from message
+  const cleanMessage = text
+    .replace(new RegExp(`@${botUsername}`, "gi"), "")
+    .trim();
+
+  if (!cleanMessage) {
+    return;
+  }
+
+  const userName = ctx.from?.first_name || ctx.from?.username || "User";
+  const chatId = ctx.chat.id;
+
+  try {
+    // Send typing indicator
+    await ctx.sendChatAction("typing");
+
+    // Get AI response
+    const response = await chat(chatId, cleanMessage, userName);
+
+    await ctx.reply(response, {
+      reply_parameters: { message_id: ctx.message.message_id },
+    });
+  } catch (error) {
+    console.error("Chat error:", error);
+    await ctx.reply("Sorry, I couldn't process that. Try again?", {
+      reply_parameters: { message_id: ctx.message.message_id },
+    });
+  }
+});
+
 // Error handling
 bot.catch((err, ctx) => {
   console.error("Bot error:", err);
@@ -333,7 +386,14 @@ export async function startBot(): Promise<void> {
     console.log("Starting Telegram bot...");
 
     const botInfo = await bot.telegram.getMe();
+    botUsername = botInfo.username || "";
     console.log("Bot info:", botInfo.username, botInfo.id);
+
+    if (config.openrouter.apiKey) {
+      console.log("Chat enabled (OpenRouter)");
+    } else {
+      console.log("Chat disabled (no OPENROUTER_API_KEY)");
+    }
 
     // Use webhooks if domain is configured
     if (config.server.domain) {

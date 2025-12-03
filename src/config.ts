@@ -43,6 +43,10 @@ export const config = {
   alchemy: {
     webhookSigningKey: process.env.ALCHEMY_WEBHOOK_SIGNING_KEY || "",
   },
+  openrouter: {
+    apiKey: process.env.OPENROUTER_API_KEY || "",
+    model: process.env.OPENROUTER_MODEL || "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+  },
   server: {
     port: parseInt(process.env.PORT || "3000", 10),
     domain: process.env.DOMAIN || "",

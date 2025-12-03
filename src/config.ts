@@ -1,6 +1,14 @@
 import { config as dotenvConfig } from "dotenv";
+import { fileURLToPath } from "url";
+import { dirname, resolve } from "path";
 
-dotenvConfig();
+// Get the directory of this file, then go up to project root
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+// From dist/config.js -> go up one level to project root
+const envPath = resolve(__dirname, "..", ".env");
+
+dotenvConfig({ path: envPath });
 
 function requireEnv(name: string): string {
   const value = process.env[name];

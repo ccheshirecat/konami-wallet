@@ -21,6 +21,7 @@ export const config = {
   },
   safe: {
     address: requireEnv("SAFE_ADDRESS"),
+    apiKey: requireEnv("SAFE_API_KEY"),
   },
   alchemy: {
     webhookSigningKey: process.env.ALCHEMY_WEBHOOK_SIGNING_KEY || "",

@@ -2,7 +2,7 @@
 import SafeApiKitModule from "@safe-global/api-kit";
 
 // The Safe API Kit has ESM/CJS interop issues with TypeScript
-const SafeApiKit = SafeApiKitModule as unknown as new (config: { chainId: bigint }) => {
+const SafeApiKit = SafeApiKitModule as unknown as new (config: { chainId: bigint; apiKey: string }) => {
   getSafeInfo: (address: string) => Promise<{ owners: string[]; threshold: number; nonce: number }>;
   getPendingTransactions: (address: string) => Promise<{ results: Array<{
     safeTxHash: string;
@@ -57,6 +57,7 @@ if (!txServiceUrl) {
 
 export const safeApiKit = new SafeApiKit({
   chainId: BigInt(config.ethereum.chainId),
+  apiKey: config.safe.apiKey,
 });
 
 export interface SafeInfo {
